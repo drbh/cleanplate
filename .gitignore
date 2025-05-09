@@ -1,0 +1,5 @@
+/target
+.bak
+*.json
+templates/*
+!templates/example.json

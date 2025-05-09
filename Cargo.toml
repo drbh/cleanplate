@@ -1,0 +1,15 @@
+[package]
+name = "cleanplate"
+version = "0.0.1"
+edition = "2021"
+authors = ["David Holtz"]
+description = "A tool for generating JSON skeletons from MiniJinja templates"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+minijinja = { version = "2.10.2", features = ["unstable_machinery", "unstable_machinery_serde"] }
+serde_json = "1.0.140"
+serde = { version = "1.0", features = ["derive"] }
+clap = { version = "4.3", features = ["derive"] }
+dirs = "6.0.0"
