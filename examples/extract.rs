@@ -16,7 +16,7 @@ struct Cli {
         short,
         long,
         value_parser,
-        default_value = "~/Projects/all-chat-templates/chat_template_to_model_ids.json"
+        default_value = "chat_template_to_model_ids.json"
     )]
     input: PathBuf,
 
@@ -89,6 +89,22 @@ fn main() -> Result<(), Box<dyn Error>> {
     let template_count = templates_map.len();
     println!("Found {template_count} templates to analyze");
 
+    let mut total_model_ids = 0;
+    let mut total_model_ids_set = HashSet::new();
+    // Count the total number of unique model IDs
+    for model_ids in templates_map.values() {
+        if let Some(id_array) = model_ids.as_array() {
+            for id_value in id_array {
+                if let Some(id_str) = id_value.as_str() {
+                    total_model_ids_set.insert(id_str.to_string());
+                }
+            }
+        }
+    }
+    total_model_ids = total_model_ids_set.len();
+    println!("Total unique model IDs: {total_model_ids}");
+    println!("");
+
     // Create a vector to store analysis results as a list of objects
     let mut analysis_results = Vec::new();
 
@@ -97,7 +113,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Process each template
     for (template_key, model_ids) in &templates_map {
-        println!("Analyzing template: {template_key}");
+        // println!("Analyzing template: {template_key}");
 
         // Clone the template key to avoid ownership issues
         let template_name = template_key.clone();
@@ -147,7 +163,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 analysis_results.push(template_analysis);
             }
             Err(err) => {
-                eprintln!("Error analyzing template '{template_name}': {err}");
+                // eprintln!("Error analyzing template '{template_name}': {err}");
                 // Add error information to the results
                 let error_analysis = json!({
                     "template": template_name,
@@ -228,27 +244,64 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let unique_shapes_count = shape_frequency_results.len();
 
+    let total_number_of_model_ids = analysis_results
+        .iter()
+        .filter(|v| v["status"] == "success")
+        .map(|v| v["model_ids"].as_array().unwrap().len())
+        .sum::<usize>();
+
+    let total_number_of_models_of_failures = analysis_results
+        .iter()
+        .filter(|v| v["status"] == "error")
+        .map(|v| v["model_ids"].as_array().unwrap().len())
+        .sum::<usize>();
+
     println!("\nSummary:");
     println!("Total templates: {template_count}");
     println!("Successfully analyzed: {success_count}");
+    println!("Total number of model IDs: {total_number_of_model_ids}");
     println!("Failed: {}", template_count - success_count);
+    println!("Total number of model IDs of failures: {total_number_of_models_of_failures}");
     println!("Unique object shapes found: {unique_shapes_count}");
 
     // Print the top 5 most common shapes (if available)
     if !shape_frequency_results.is_empty() {
+        // loop until 95% of the models are covered
+        let mut covered = 0.0;
+        let mut total = 0.0;
         println!(
-            "\nTop {} most common shapes:",
-            shape_frequency_results.len().min(5)
+            "| index | {:^14} | {:^14} | {:^13} | {:^9} |",
+            "template_count", "model_id_count", "Pct of models", "Covered"
         );
-        for (i, result) in shape_frequency_results.iter().take(5).enumerate() {
+        println!(
+            "|{:-<7}|{:-<16}|{:-<16}|{:-<15}|{:-<11}|",
+            "", "", "", "", ""
+        );
+        for (i, result) in shape_frequency_results.iter().enumerate() {
+            let model_count = result["model_id_count"].as_f64().unwrap_or(0.0);
+            total += model_count;
+            let contrib = model_count / total_model_ids as f64 * 100.0;
+            covered += contrib;
             println!(
-                "  {}. Template count: {}, Model ID count: {}",
-                i + 1,
-                result["template_count"],
-                result["model_id_count"]
+                "| {:^5} | {:^14} | {:^14} | {:^13} | {:^9} |",
+                format!("{:02}", i + 1),
+                format!("{:.2}", result["template_count"]),
+                format!("{:.2}", result["model_id_count"]),
+                format!("{:.2}%", contrib),
+                format!("{:.2}%", covered)
             );
+            if covered >= 95.0 {
+                break;
+            }
         }
     }
 
     Ok(())
 }
+
+// How many templates are needed for a given target percent
+// 50% in 4
+// 80% in 10
+// 90% in 16
+// 95% in 25
+// 99% in 62
